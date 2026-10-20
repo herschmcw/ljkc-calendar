@@ -1,0 +1,49 @@
+# LiveJazzKC calendar — free-route data publisher
+#
+# Put this repo together as:
+#   .github/workflows/calendar.yml   (this file)
+#   build_events_json.py
+#   requirements.txt
+# Then set the Squarespace widget's API_URL to:
+#   https://raw.githubusercontent.com/<owner>/<repo>/main/events.json
+#
+# Runs every 30 minutes, rebuilds events.json from the public Google
+# Calendar feed, and commits it only when it changed.
+
+name: calendar
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: calendar
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Build events.json (next 60 days)
+        run: python build_events_json.py 60 events.json
+      - name: Commit if changed
+        run: |
+          git config user.name "ljkc-calendar-bot"
+          git config user.email "calendar@livejazzkc.com"
+          git add events.json
+          if git diff --cached --quiet; then
+            echo "No changes."
+          else
+            git commit -m "Update calendar events"
+            git push
+          fi
